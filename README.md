@@ -1,11 +1,11 @@
 # CryptoTracker
-Terminal-based Cryptocurrency ticker using the GDAX api
+Simple terminal-based Cryptocurrency price tracker using the GDAX api
 
 ![Screenshot](crypto_tracker_ss.png?raw=true)
 
 ### Requirements
 * Python 2.7
-* GDAX Python wrapper
+* [GDAX Python wrapper](https://github.com/danpaquin/GDAX-Python)
 * getkey
 * blessings
 
@@ -26,6 +26,11 @@ python crypto_tracker.py -b
 python crypto_tracker.py -e
 python crypto_tracker.py -l
 python crypto_tracker.py -b -l
+```
+
+To suppress display of price difference since day's open price:
+```sh
+python crypto_tracker.py --nodiff
 ```
 
 Press <kbd>Escape</kbd> to quit
