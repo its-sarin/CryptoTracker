@@ -1,11 +1,11 @@
 import sys
+import datetime
 import optparse
 import GDAX
 from getkey import getkey, keys
 from blessings import Terminal
 
-key = None
-
+# Command line options
 usage = "usage: %prog [options] arg1 arg2 arg3"
 parser = optparse.OptionParser(usage=usage)
 
@@ -18,17 +18,28 @@ parser.add_option('-e', '--eth', action="store_true", dest="eth",
 parser.add_option('-l', '--ltc', action="store_true", dest="ltc",
     help="Limit crypto tracker to LTC-USD", default=False)
 
+parser.add_option('--nodiff', action="store_true", dest="nodiff",
+    help="Suppress display of price difference since day's opening price", default=False)
+
 # Parse arguments
 (options, args) = parser.parse_args()
+
+# Websocket url
+url = "wss://ws-feed.gdax.com/"
+
+# Set initial list of possible coins
+coins = ["BTC-USD", "ETH-USD", "LTC-USD"]
+prods = []
+
+# Key variable for listening for quit key
+key = None
 
 # Handle coin options
 btc = options.btc
 eth = options.eth
 ltc = options.ltc
+nodiff = options.nodiff
 all_coins = (not btc and not eth and not ltc)
-
-coins = ["BTC-USD", "ETH-USD", "LTC-USD"]
-prods = []
 
 if (all_coins):
     prods = coins
@@ -46,15 +57,18 @@ print term.enter_fullscreen
 print term.move_y(0)
 
 # GDAX Websocket Client
-class GDAXWebsocketClient(GDAX.WebsocketClient):
-    def __init__(self, prods):
+class GDAXMessageFeed(GDAX.WebsocketClient):
+    def __init__(self, url, products, nodiff):
         # Initialize class variables
-        self._prods = prods
-        self._btc = "BTC-USD" in self._prods
-        self._eth = "ETH-USD" in self._prods
-        self._ltc = "LTC-USD" in self._prods
+        self.products = products
+        self.url = url
+        self._btc = "BTC-USD" in self.products
+        self._eth = "ETH-USD" in self.products
+        self._ltc = "LTC-USD" in self.products
+        self._nodiff = nodiff
 
         self.recvd_data = False
+
         self.btc_price = 0
         self.eth_price = 0
         self.ltc_price = 0
@@ -62,26 +76,29 @@ class GDAXWebsocketClient(GDAX.WebsocketClient):
         self.new_eth_price = 0
         self.new_ltc_price = 0
 
+        self.btc_open = 0
+        self.eth_open = 0
+        self.ltc_open = 0
+
         self.btc_change = False
         self.eth_change = False
         self.ltc_change = False
         self.btc_up = False
         self.eth_up = False
         self.ltc_up = False
+
+        self.btc_amt_change = 0
+        self.eth_amt_change = 0
+        self.ltc_amt_change = 0
+
+        self.today = None
 
     def onOpen(self):
-        # Subscription values
-        self.url = "wss://ws-feed.gdax.com/"
-        self.products = self._prods
+        self._set_open()
 
     def onMessage(self, msg):
-        # Reset flags
-        self.btc_change = False
-        self.eth_change = False
-        self.ltc_change = False
-        self.btc_up = False
-        self.eth_up = False
-        self.ltc_up = False
+        if (datetime.datetime.today().day != self.today):
+            self._set_open()
 
         # If we're showing BTC-USD
         if (self._btc):
@@ -89,14 +106,21 @@ class GDAXWebsocketClient(GDAX.WebsocketClient):
             if (msg["type"] == "done" and msg["reason"] == "filled" and msg["product_id"] == "BTC-USD"):
                 if (msg.has_key("price")):
                     self.recvd_data = True
-                    self.new_btc_price = msg["price"]
+                    self.new_btc_price = float(msg["price"])
 
             # Bitcoin - If the new price is different from old price, update
             if (self.btc_price != self.new_btc_price):
                 self.btc_change = True
-                if (self.btc_price < self.new_btc_price):
+                self.btc_amt_change = self.new_btc_price - self.btc_open
+
+                if (self.new_btc_price > self.btc_open):
                     self.btc_up = True
+                else:
+                    self.btc_up = False
+
                 self.btc_price = self.new_btc_price
+            else:
+                self.btc_change = False
 
         # If we're showing ETH-USD
         if (self._eth):
@@ -104,14 +128,21 @@ class GDAXWebsocketClient(GDAX.WebsocketClient):
             if (msg["type"] == "done" and msg["reason"] == "filled" and msg["product_id"] == "ETH-USD"):
                 if (msg.has_key("price")):
                     self.recvd_data = True
-                    self.new_eth_price = msg["price"]
+                    self.new_eth_price = float(msg["price"])
 
             # Ether - If the new price is different from old price, update
             if (self.eth_price != self.new_eth_price):
                 self.eth_change = True
-                if (self.eth_price < self.new_eth_price):
+                self.eth_amt_change = self.new_eth_price - self.eth_open
+
+                if (self.new_eth_price > self.eth_open):
                     self.eth_up = True
+                else:
+                    self.eth_up = False
+
                 self.eth_price = self.new_eth_price
+            else:
+                self.eth_change = False
 
         # If we're showing LTC-USD
         if (self._ltc):
@@ -119,18 +150,39 @@ class GDAXWebsocketClient(GDAX.WebsocketClient):
             if (msg["type"] == "done" and msg["reason"] == "filled" and msg["product_id"] == "LTC-USD"):
                 if (msg.has_key("price")):
                     self.recvd_data = True
-                    self.new_ltc_price = msg["price"]
+                    self.new_ltc_price = float(msg["price"])
 
             # Litecoin - If the new price is different from old price, update
             if (self.ltc_price != self.new_ltc_price):
                 self.ltc_change = True
-                if (self.ltc_price < self.new_ltc_price):
+                self.ltc_amt_change = self.new_ltc_price - self.ltc_open
+
+                if (self.new_ltc_price > self.ltc_open):
                     self.ltc_up = True
+                else:
+                    self.ltc_up = False
+
                 self.ltc_price = self.new_ltc_price
+            else:
+                self.ltc_change = False
 
         # If we have no date yet or there has been a change in some value,
         # write out the updated values
         if (self.recvd_data == False or self.btc_change or self.eth_change or self.ltc_change):
+            self._print_message()
+
+    def onClose(self):
+        print("\n\033[0;32m-- Goodbye! --\033[0;0m")
+
+    def _set_open(self):
+        self.today = datetime.datetime.today().day
+        self.btc_open = float(GDAX.PublicClient(product_id="BTC-USD").getProduct24HrStats()["open"])
+        self.eth_open = float(GDAX.PublicClient(product_id="ETH-USD").getProduct24HrStats()["open"])
+        self.ltc_open = float(GDAX.PublicClient(product_id="LTC-USD").getProduct24HrStats()["open"])
+
+    def _print_message(self):
+        print(term.clear)
+        with term.location(0, 0):
             sys.stdout.write("\033[K")
 
             if (self._btc):
@@ -139,7 +191,9 @@ class GDAXWebsocketClient(GDAX.WebsocketClient):
                 else:
                     sys.stdout.write("\033[1;31m")
 
-                sys.stdout.write("BTC-USD: $%.3f" % float(self.btc_price))
+                sys.stdout.write("BTC-USD: $%.3f" % self.btc_price)
+                if not nodiff:
+                    sys.stdout.write(" (%.2f)" % self.btc_amt_change)
 
             if (self._btc and self._eth):
                 sys.stdout.write("\033[1;36m")
@@ -151,7 +205,9 @@ class GDAXWebsocketClient(GDAX.WebsocketClient):
                 else:
                     sys.stdout.write("\033[1;31m")
 
-                sys.stdout.write("ETH-USD: $%.3f" % float(self.eth_price))
+                sys.stdout.write("ETH-USD: $%.3f" % self.eth_price)
+                if not nodiff:
+                    sys.stdout.write(" (%.2f)" % self.eth_amt_change)
 
             if (self._ltc and (self._eth or self._btc)):
                 sys.stdout.write("\033[1;36m")
@@ -163,16 +219,16 @@ class GDAXWebsocketClient(GDAX.WebsocketClient):
                 else:
                     sys.stdout.write("\033[1;31m")
 
-                sys.stdout.write("LTC-USD: $%.3f" % float(self.ltc_price))
+                sys.stdout.write("LTC-USD: $%.3f" % self.ltc_price)
+                if not nodiff:
+                    sys.stdout.write(" (%.2f)" % self.ltc_amt_change)
 
             sys.stdout.write("\r")
             sys.stdout.flush()
 
-    def onClose(self):
-        print("\n\033[0;32m-- Goodbye! --")
 
 # Start the websocket client
-ws_client = GDAXWebsocketClient(prods)
+ws_client = GDAXMessageFeed(url, prods, nodiff)
 ws_client.start()
 
 # Listen for Escape key to quit and close websocket if so
