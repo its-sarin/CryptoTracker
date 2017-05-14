@@ -1,7 +1,10 @@
 # CryptoTracker
 Simple terminal-based Cryptocurrency price tracker using the GDAX api
 
+Default view:
 ![Screenshot](crypto_tracker_ss.png?raw=true)
+With price differences suppressed:
+![Screenshot](crypto_tracker_ss_nodiff.png?raw=true)
 
 ### Requirements
 * Python 2.7
