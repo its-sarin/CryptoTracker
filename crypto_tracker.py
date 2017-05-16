@@ -1,9 +1,13 @@
 import sys
+from os import system
 import datetime
 import optparse
 import GDAX
 from getkey import getkey, keys
 from blessings import Terminal
+
+# Hide the cursor
+system('setterm -cursor off')
 
 # Command line options
 usage = "usage: %prog [options] arg1 arg2 arg3"
@@ -52,13 +56,21 @@ else:
     if (ltc):
         prods.append(coins[2])
 
-# Enter fullscreen mode
+# Store new Blessings terminal object
 term = Terminal()
+
+# Enter fullscreen mode
 print term.enter_fullscreen
-print term.move_y(0)
 
 # GDAX Websocket Client
 class GDAXMessageFeed(GDAX.WebsocketClient):
+    # ANSI color codes
+    CYAN = "\033[1;36m"
+    RED = "\033[1;31m"
+    GREEN = "\033[0;32m"
+    NORMAL = "\033[0;0m"
+    CLEARTOEND = "\033[K"
+
     def __init__(self, url, products, nodiff):
         # Initialize class variables
         self.products = products
@@ -115,7 +127,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
                 self.btc_change = True
                 self.btc_amt_change = self.new_btc_price - self.btc_open
 
-                if (self.new_btc_price > self.btc_open):
+                if (self.new_btc_price >= self.btc_open):
                     self.btc_up = True
                 else:
                     self.btc_up = False
@@ -139,7 +151,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
                 self.eth_change = True
                 self.eth_amt_change = self.new_eth_price - self.eth_open
 
-                if (self.new_eth_price > self.eth_open):
+                if (self.new_eth_price >= self.eth_open):
                     self.eth_up = True
                 else:
                     self.eth_up = False
@@ -163,7 +175,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
                 self.ltc_change = True
                 self.ltc_amt_change = self.new_ltc_price - self.ltc_open
 
-                if (self.new_ltc_price > self.ltc_open):
+                if (self.new_ltc_price >= self.ltc_open):
                     self.ltc_up = True
                 else:
                     self.ltc_up = False
@@ -172,14 +184,15 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
             else:
                 self.ltc_change = False
 
-        # If we have no date yet or there has been a change in some value,
-        # write out the updated values
+        # If there has been a change in some value, print out the updated values
         if (self.btc_change or self.eth_change or self.ltc_change):
             self._print_message()
 
     def onClose(self):
         # Say goodbye
-        print("\n\033[0;32m-- Goodbye! --\033[0;0m")
+        print("\n" + self.CYAN + "-- Goodbye! --" + self.NORMAL)
+        # Bring the cursor back
+        system('setterm -cursor on')
 
     def _set_open(self):
         # Set today's date
@@ -190,43 +203,48 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
         self.ltc_open = float(GDAX.PublicClient(product_id="LTC-USD").getProduct24HrStats()["open"])
 
     def _print_message(self):
+        # clear terminal
         print(term.clear)
+        # move to x,y location 0,0 (top left)
         with term.location(0, 0):
-            sys.stdout.write("\033[K")
+            sys.stdout.write(self.CLEARTOEND)
 
+            # If we're showing BTC-USD, print values
             if (self._btc):
                 if (self.btc_up):
-                    sys.stdout.write("\033[0;32m")
+                    sys.stdout.write(self.GREEN)
                 else:
-                    sys.stdout.write("\033[1;31m")
+                    sys.stdout.write(self.RED)
 
                 sys.stdout.write("BTC-USD: $%.2f" % self.btc_price)
                 if not nodiff:
                     sys.stdout.write(" (%.2f)" % self.btc_amt_change)
 
+            # Show pipe separator if we're showing BTC-USD and ETH-USD
             if (self._btc and self._eth):
-                sys.stdout.write("\033[1;36m")
-                sys.stdout.write(" | ")
+                sys.stdout.write(self.CYAN + " | ")
 
+            # If we're showing ETH-USD, print values
             if (self._eth):
                 if (self.eth_up):
-                    sys.stdout.write("\033[0;32m")
+                    sys.stdout.write(self.GREEN)
                 else:
-                    sys.stdout.write("\033[1;31m")
+                    sys.stdout.write(self.RED)
 
                 sys.stdout.write("ETH-USD: $%.2f" % self.eth_price)
                 if not nodiff:
                     sys.stdout.write(" (%.2f)" % self.eth_amt_change)
 
+            # Show pipe separator if we're showing LTC-USD and ETH-USD or BTC-USD
             if (self._ltc and (self._eth or self._btc)):
-                sys.stdout.write("\033[1;36m")
-                sys.stdout.write(" | ")
+                sys.stdout.write(self.CYAN + " | ")
 
+            # If we're showing LTC-USD, print values
             if (self._ltc):
                 if (self.ltc_up):
-                    sys.stdout.write("\033[0;32m")
+                    sys.stdout.write(self.GREEN)
                 else:
-                    sys.stdout.write("\033[1;31m")
+                    sys.stdout.write(self.RED)
 
                 sys.stdout.write("LTC-USD: $%.2f" % self.ltc_price)
                 if not nodiff:
