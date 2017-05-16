@@ -1,13 +1,15 @@
 import sys
-from os import system
+from os import name as os_name
 import datetime
 import optparse
 import GDAX
 from getkey import getkey, keys
 from blessings import Terminal
 
-# Hide the cursor
-system('setterm -cursor off')
+# Hide the cursor (for now only works on Mac and Linux)
+if os_name == "posix":
+    sys.stdout.write("\033[?25l")
+    sys.stdout.flush()
 
 # Command line options
 usage = "usage: %prog [options] arg1 arg2 arg3"
@@ -192,7 +194,9 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
         # Say goodbye
         print("\n" + self.CYAN + "-- Goodbye! --" + self.NORMAL)
         # Bring the cursor back
-        system('setterm -cursor on')
+        if os_name == "posix":
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
 
     def _set_open(self):
         # Set today's date
