@@ -1,6 +1,7 @@
 import sys
 from os import name as os_name
-import datetime
+from datetime import datetime
+from time import time, localtime, strftime
 import optparse
 import GDAX
 from getkey import getkey, keys
@@ -28,6 +29,10 @@ parser.add_option('--nodiff', action="store_true", dest="nodiff",
     help="Suppress display of price difference since day's opening price",
     default=False)
 
+parser.add_option('-t', '--time', action="store_true", dest="show_time",
+    help="Display time of last update at bottom of terminal",
+    default=False)
+
 # Parse arguments
 (options, args) = parser.parse_args()
 
@@ -46,6 +51,7 @@ btc = options.btc
 eth = options.eth
 ltc = options.ltc
 nodiff = options.nodiff
+show_time = options.show_time
 all_coins = (not btc and not eth and not ltc)
 
 if (all_coins):
@@ -73,7 +79,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
     NORMAL = "\033[0;0m"
     CLEARTOEND = "\033[K"
 
-    def __init__(self, url, products, nodiff):
+    def __init__(self, url, products, nodiff, show_time):
         # Initialize class variables
         self.products = products
         self.url = url
@@ -81,6 +87,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
         self._eth = "ETH-USD" in self.products
         self._ltc = "LTC-USD" in self.products
         self._nodiff = nodiff
+        self._show_time = show_time
 
         self.btc_price = 0
         self.eth_price = 0
@@ -105,13 +112,16 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
         self.ltc_amt_change = 0
 
         self.today = None
+        self.last_msg_time = None
 
     def onOpen(self):
         self._set_open()
         self._print_message()
 
     def onMessage(self, msg):
-        if (datetime.datetime.today().day != self.today):
+        self.last_msg_time = time()
+
+        if (datetime.today().day != self.today):
             self._set_open()
 
         # If we're showing BTC-USD
@@ -200,7 +210,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
 
     def _set_open(self):
         # Set today's date
-        self.today = datetime.datetime.today().day
+        self.today = datetime.today().day
         # Get the day's opening price for each currency
         self.btc_open = float(GDAX.PublicClient(product_id="BTC-USD").getProduct24HrStats()["open"])
         self.eth_open = float(GDAX.PublicClient(product_id="ETH-USD").getProduct24HrStats()["open"])
@@ -209,6 +219,18 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
     def _print_message(self):
         # clear terminal
         print(term.clear)
+
+        # Show time of last message if option is enabled
+        if self._show_time:
+            with term.location(0, term.height - 1):
+                # If we've received messages, print out last received time
+                # else print "retrieving data"
+                if self.last_msg_time:
+                    t = strftime("%I:%M %p", localtime(self.last_msg_time))
+                    sys.stdout.write("-- last update: %s --" % t)
+                else:
+                    sys.stdout.write("-- retrieving data --")
+
         # move to x,y location 0,0 (top left)
         with term.location(0, 0):
             sys.stdout.write(self.CLEARTOEND)
@@ -259,7 +281,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
 
 
 # Start the websocket client
-ws_client = GDAXMessageFeed(url, prods, nodiff)
+ws_client = GDAXMessageFeed(url, prods, nodiff, show_time)
 ws_client.start()
 
 # Listen for Escape key to quit and close websocket if so
