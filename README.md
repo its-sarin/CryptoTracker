@@ -36,4 +36,13 @@ To suppress display of price difference since day's open price:
 python crypto_tracker.py --nodiff
 ```
 
+To display time of last received update:
+```sh
+python crypto_tracker.py -t
+python crypto_tracker.py --time
+```
+
 Press <kbd>Escape</kbd> to quit
+
+### Known Issues
+* Websocket does on occasion drop out, either due to server or client connection. When this happens there is no automatic reconnect and you will have to quit out manually and restart. For this reason, an optional display of last update time was added so it's easier to notice when this has happened.
