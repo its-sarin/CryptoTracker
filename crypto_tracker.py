@@ -201,8 +201,11 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
             self._print_message()
 
     def onClose(self):
+        # Clear the screen
+        print(term.clear)
         # Say goodbye
-        print("\n" + self.CYAN + "-- Goodbye! --" + self.NORMAL)
+        with term.location(0, 0):
+            print(self.CYAN + "-- Goodbye! --" + self.NORMAL)
         # Bring the cursor back
         if os_name == "posix":
             sys.stdout.write("\033[?25h")
