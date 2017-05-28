@@ -25,8 +25,8 @@ parser.add_option('-e', '--eth', action="store_true", dest="eth",
 parser.add_option('-l', '--ltc', action="store_true", dest="ltc",
     help="Limit crypto tracker to LTC-USD", default=False)
 
-parser.add_option('--nodiff', action="store_true", dest="nodiff",
-    help="Suppress display of price difference since day's opening price",
+parser.add_option('-p', '--pdiff', action="store_true", dest="diff",
+    help="Display percent difference since day's opening price",
     default=False)
 
 parser.add_option('-t', '--time', action="store_true", dest="show_time",
@@ -50,7 +50,7 @@ key = None
 btc = options.btc
 eth = options.eth
 ltc = options.ltc
-nodiff = options.nodiff
+diff = options.diff
 show_time = options.show_time
 all_coins = (not btc and not eth and not ltc)
 
@@ -79,14 +79,14 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
     NORMAL = "\033[0;0m"
     CLEARTOEND = "\033[K"
 
-    def __init__(self, url, products, nodiff, show_time):
+    def __init__(self, url, products, diff, show_time):
         # Initialize class variables
         self.products = products
         self.url = url
         self._btc = "BTC-USD" in self.products
         self._eth = "ETH-USD" in self.products
         self._ltc = "LTC-USD" in self.products
-        self._nodiff = nodiff
+        self._diff = diff
         self._show_time = show_time
 
         self.btc_price = 0
@@ -137,7 +137,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
             # Bitcoin - If the new price is different from old price, update
             if (self.btc_price != self.new_btc_price):
                 self.btc_change = True
-                self.btc_amt_change = self.new_btc_price - self.btc_open
+                self.btc_amt_change = self.new_btc_price / self.btc_open
 
                 if (self.new_btc_price >= self.btc_open):
                     self.btc_up = True
@@ -161,7 +161,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
             # Ether - If the new price is different from old price, update
             if (self.eth_price != self.new_eth_price):
                 self.eth_change = True
-                self.eth_amt_change = self.new_eth_price - self.eth_open
+                self.eth_amt_change = self.new_eth_price / self.eth_open
 
                 if (self.new_eth_price >= self.eth_open):
                     self.eth_up = True
@@ -185,7 +185,7 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
             # Litecoin - If the new price is different from old price, update
             if (self.ltc_price != self.new_ltc_price):
                 self.ltc_change = True
-                self.ltc_amt_change = self.new_ltc_price - self.ltc_open
+                self.ltc_amt_change = self.new_ltc_price / self.ltc_open
 
                 if (self.new_ltc_price >= self.ltc_open):
                     self.ltc_up = True
@@ -246,8 +246,13 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
                     sys.stdout.write(self.RED)
 
                 sys.stdout.write("BTC-USD: $%.2f" % self.btc_price)
-                if not nodiff:
-                    sys.stdout.write(" (%.2f)" % self.btc_amt_change)
+                if self._diff:
+                    if self.btc_up:
+                        sys.stdout.write(" (+")
+                    else:
+                        sys.stdout.write(" (-")
+
+                    sys.stdout.write("%.2f%%)" % self.btc_amt_change)
 
             # Show pipe separator if we're showing BTC-USD and ETH-USD
             if (self._btc and self._eth):
@@ -261,8 +266,13 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
                     sys.stdout.write(self.RED)
 
                 sys.stdout.write("ETH-USD: $%.2f" % self.eth_price)
-                if not nodiff:
-                    sys.stdout.write(" (%.2f)" % self.eth_amt_change)
+                if self._diff:
+                    if self.eth_up:
+                        sys.stdout.write(" (+")
+                    else:
+                        sys.stdout.write(" (-")
+
+                    sys.stdout.write("%.2f%%)" % self.eth_amt_change)
 
             # Show pipe separator if we're showing LTC-USD and ETH-USD or BTC-USD
             if (self._ltc and (self._eth or self._btc)):
@@ -276,15 +286,20 @@ class GDAXMessageFeed(GDAX.WebsocketClient):
                     sys.stdout.write(self.RED)
 
                 sys.stdout.write("LTC-USD: $%.2f" % self.ltc_price)
-                if not nodiff:
-                    sys.stdout.write(" (%.2f)" % self.ltc_amt_change)
+                if self._diff:
+                    if self.ltc_up:
+                        sys.stdout.write(" (+")
+                    else:
+                        sys.stdout.write(" (-")
+
+                    sys.stdout.write("%.2f%%)" % self.ltc_amt_change)
 
             sys.stdout.write("\r")
             sys.stdout.flush()
 
 
 # Start the websocket client
-ws_client = GDAXMessageFeed(url, prods, nodiff, show_time)
+ws_client = GDAXMessageFeed(url, prods, diff, show_time)
 ws_client.start()
 
 # Listen for Escape key to quit and close websocket if so
