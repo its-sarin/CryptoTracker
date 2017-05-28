@@ -31,9 +31,10 @@ python crypto_tracker.py -l
 python crypto_tracker.py -b -l
 ```
 
-To suppress display of price difference since day's open price:
+To display the percent difference since day's open price:
 ```sh
-python crypto_tracker.py --nodiff
+python crypto_tracker.py -p
+python crypto_tracker.py --pdiff
 ```
 
 To display time of last received update:
